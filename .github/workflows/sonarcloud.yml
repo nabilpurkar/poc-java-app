@@ -42,12 +42,16 @@ jobs:
       - name: Run Sonar Analysis on SonarCloud
         if: ${{ github.event.inputs.environment == 'SonarCloud' }}
         run: |
-          echo "Running analysis on SonarCloud"
-          echo "URL     : ${{ vars.SONARCLOUD_HOST_URL }}"
-          echo "Project : ${{ vars.SONARCLOUD_PROJECT_KEY }}"
-          echo "Org     : ${{ vars.SONARCLOUD_ORGANIZATION }}"
+          echo "========================================"
+          echo " Environment  : SonarCloud"
+          echo " URL          : ${{ vars.SONARCLOUD_HOST_URL }}"
+          echo " Project Key  : ${{ vars.SONARCLOUD_PROJECT_KEY }}"
+          echo " Project Name : ${{ vars.SONARCLOUD_PROJECT_NAME }}"
+          echo " Organization : ${{ vars.SONARCLOUD_ORGANIZATION }}"
+          echo "========================================"
           mvn sonar:sonar \
             -Dsonar.projectKey=${{ vars.SONARCLOUD_PROJECT_KEY }} \
+            -Dsonar.projectName="${{ vars.SONARCLOUD_PROJECT_NAME }}" \
             -Dsonar.organization=${{ vars.SONARCLOUD_ORGANIZATION }} \
             -Dsonar.host.url=${{ vars.SONARCLOUD_HOST_URL }} \
             -Dsonar.token=${{ secrets.SONARCLOUD_TOKEN }}
@@ -58,11 +62,15 @@ jobs:
       - name: Run Sonar Analysis on SonarCommunity
         if: ${{ github.event.inputs.environment == 'SonarCommunity' }}
         run: |
-          echo "Running analysis on SonarCommunity"
-          echo "URL     : ${{ vars.SONAR_COMMUNITY_HOST_URL }}"
-          echo "Project : ${{ vars.SONAR_COMMUNITY_PROJECT_KEY }}"
+          echo "========================================"
+          echo " Environment  : SonarCommunity"
+          echo " URL          : ${{ vars.SONAR_COMMUNITY_HOST_URL }}"
+          echo " Project Key  : ${{ vars.SONAR_COMMUNITY_PROJECT_KEY }}"
+          echo " Project Name : ${{ vars.SONAR_COMMUNITY_PROJECT_NAME }}"
+          echo "========================================"
           mvn sonar:sonar \
             -Dsonar.projectKey=${{ vars.SONAR_COMMUNITY_PROJECT_KEY }} \
+            -Dsonar.projectName="${{ vars.SONAR_COMMUNITY_PROJECT_NAME }}" \
             -Dsonar.host.url=${{ vars.SONAR_COMMUNITY_HOST_URL }} \
             -Dsonar.login=${{ secrets.SONAR_COMMUNITY_TOKEN }}
         env:
