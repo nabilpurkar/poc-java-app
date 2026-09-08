@@ -64,7 +64,7 @@ jobs:
           mvn sonar:sonar \
             -Dsonar.projectKey=${{ vars.SONAR_COMMUNITY_PROJECT_KEY }} \
             -Dsonar.host.url=${{ vars.SONAR_COMMUNITY_HOST_URL }} \
-            -Dsonar.token=${{ secrets.SONAR_COMMUNITY_TOKEN }}
+            -Dsonar.login=${{ secrets.SONAR_COMMUNITY_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
