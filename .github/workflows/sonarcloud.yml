@@ -1,16 +1,19 @@
-name: SonarCloud Analysis
+name: Sonar Analysis
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Where do you want to run Sonar analysis?'
+        required: true
+        type: choice
+        options:
+          - SonarCloud
+          - SonarCommunity
 
 jobs:
-  sonarcloud:
-    name: SonarCloud Scan
+  sonar-analysis:
+    name: Sonar Analysis on ${{ github.event.inputs.environment }}
     runs-on: ubuntu-latest
 
     steps:
@@ -35,7 +38,45 @@ jobs:
       - name: Build and run tests
         run: mvn clean verify
 
-      - name: SonarCloud Scan
-        run: mvn sonar:sonar -Dsonar.token=${{ secrets.SONAR_TOKEN }}
+      # ── SonarCloud ──────────────────────────────────────────
+      - name: Run Sonar Analysis on SonarCloud
+        if: ${{ github.event.inputs.environment == 'SonarCloud' }}
+        run: |
+          echo "Running analysis on SonarCloud"
+          echo "URL     : ${{ vars.SONARCLOUD_HOST_URL }}"
+          echo "Project : ${{ vars.SONARCLOUD_PROJECT_KEY }}"
+          echo "Org     : ${{ vars.SONARCLOUD_ORGANIZATION }}"
+          mvn sonar:sonar \
+            -Dsonar.projectKey=${{ vars.SONARCLOUD_PROJECT_KEY }} \
+            -Dsonar.organization=${{ vars.SONARCLOUD_ORGANIZATION }} \
+            -Dsonar.host.url=${{ vars.SONARCLOUD_HOST_URL }} \
+            -Dsonar.token=${{ secrets.SONARCLOUD_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── SonarCommunity ──────────────────────────────────────
+      - name: Run Sonar Analysis on SonarCommunity
+        if: ${{ github.event.inputs.environment == 'SonarCommunity' }}
+        run: |
+          echo "Running analysis on SonarCommunity"
+          echo "URL     : ${{ vars.SONAR_COMMUNITY_HOST_URL }}"
+          echo "Project : ${{ vars.SONAR_COMMUNITY_PROJECT_KEY }}"
+          mvn sonar:sonar \
+            -Dsonar.projectKey=${{ vars.SONAR_COMMUNITY_PROJECT_KEY }} \
+            -Dsonar.host.url=${{ vars.SONAR_COMMUNITY_HOST_URL }} \
+            -Dsonar.token=${{ secrets.SONAR_COMMUNITY_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── Summary ─────────────────────────────────────────────
+      - name: Print Result
+        run: |
+          echo "========================================"
+          echo " Analysis complete!"
+          echo " Environment : ${{ github.event.inputs.environment }}"
+          if [ "${{ github.event.inputs.environment }}" == "SonarCloud" ]; then
+            echo " Results at  : ${{ vars.SONARCLOUD_HOST_URL }}/project/overview?id=${{ vars.SONARCLOUD_PROJECT_KEY }}"
+          else
+            echo " Results at  : ${{ vars.SONAR_COMMUNITY_HOST_URL }}/dashboard?id=${{ vars.SONAR_COMMUNITY_PROJECT_KEY }}"
+          fi
+          echo "========================================"
