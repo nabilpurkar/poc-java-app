@@ -23,9 +23,9 @@ on:
         options: [scale-down, scale-up]
         default: scale-up
   schedule:
-    - cron: '52 12 * * *'  
+    - cron: '35 15 * * *'  
       timezone: 'Asia/Dubai'
-    - cron: '20 14 * * *'  
+    - cron: '20 22 * * *'  
       timezone: 'Asia/Dubai'
 permissions:
   contents: read
