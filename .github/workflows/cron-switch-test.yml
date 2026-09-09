@@ -23,8 +23,8 @@ on:
         options: [scale-down, scale-up]
         default: scale-up
   schedule:
-    - cron: '22 8 * * *'   # 12:16 UAE -> scale-up
-    - cron: '26 8 * * *'   # 12:20 UAE -> scale-down
+    - cron: '26 8 * * *'   # 12:16 UAE -> scale-up
+    - cron: '50 8 * * *'   # 12:20 UAE -> scale-down
 permissions:
   contents: read
 jobs:
