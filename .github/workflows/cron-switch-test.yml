@@ -28,7 +28,7 @@ on:
         options: [scale-down, scale-up]
         default: scale-up
   schedule:
-    - cron: '50 8 * * *'   # 08:38 UAE -> scale-up
+    - cron: '10 10 * * *'   # 08:38 UAE -> scale-up
       timezone: 'Asia/Dubai'
     - cron: '40 12 * * *'   # 08:40 UAE -> scale-down
       timezone: 'Asia/Dubai'
