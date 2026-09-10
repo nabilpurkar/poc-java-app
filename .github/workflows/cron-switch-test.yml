@@ -9,8 +9,9 @@ name: Cron Switch Test
 #        CRON_ENABLED        = true|false   (this env's cron switch)
 #   3. Flip them and watch the run summary to confirm gating.
 #
-# NOTE: GitHub cron is UTC and is frequently delayed several minutes.
-#       Times below assume UAE (UTC+4): 12:16 -> 08:16 UTC, 12:20 -> 08:20 UTC.
+# NOTE: GitHub cron supports a `timezone:` field (IANA name). Using Asia/Dubai,
+#       so the times below are UAE local time directly. Scheduled runs can still
+#       be delayed several minutes on GitHub's side.
 on:
   workflow_dispatch:
     inputs:
@@ -18,14 +19,18 @@ on:
         description: 'Run for dev'
         type: boolean
         default: true
+      uat:
+        description: 'Run for uat'
+        type: boolean
+        default: true
       action:
         type: choice
         options: [scale-down, scale-up]
         default: scale-up
   schedule:
-    - cron: '35 15 * * *'  
+    - cron: '50 8 * * *'   # 08:38 UAE -> scale-up
       timezone: 'Asia/Dubai'
-    - cron: '20 22 * * *'  
+    - cron: '40 12 * * *'   # 08:40 UAE -> scale-down
       timezone: 'Asia/Dubai'
 permissions:
   contents: read
@@ -48,8 +53,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      ENVIRONMENTS: 'dev'
+      ENVIRONMENTS: 'dev uat'
       INPUT_DEV: ${{ inputs.dev }}
+      INPUT_UAT: ${{ inputs.uat }}
     outputs:
       matrix: ${{ steps.logic.outputs.matrix }}
       skip_all: ${{ steps.logic.outputs.skip_all }}
@@ -69,9 +75,9 @@ jobs:
               exit 0
             fi
             case "${{ github.event.schedule }}" in
-              '16 8 * * *') ACTION="scale-up" ;;
-              '20 8 * * *') ACTION="scale-down" ;;
-              *)            ACTION="skip" ;;
+              '38 8 * * *') ACTION="scale-up" ;;
+              '40 8 * * *') ACTION="scale-down" ;;
+              *)             ACTION="skip" ;;
             esac
           fi
           if [[ "$ACTION" == "skip" ]]; then
