@@ -44,6 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.m.outputs.matrix }}
+      has_jobs: ${{ steps.m.outputs.has_jobs }}
     env:
       ENVIRONMENTS: 'dev uat'
       INPUT_DEV: ${{ inputs.dev }}
@@ -72,6 +73,11 @@ jobs:
           done
           MATRIX="{\"include\":[$inc]}"
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          if [[ "$MATRIX" == '{"include":[]}' ]]; then
+            echo "has_jobs=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_jobs=true" >> "$GITHUB_OUTPUT"
+          fi
           echo "event=${{ github.event_name }} dev=${INPUT_DEV:-} uat=${INPUT_UAT:-} action=$ACTION"
           echo "resolved matrix: $MATRIX"
           {
@@ -84,7 +90,7 @@ jobs:
 
   run:
     needs: decide
-    if: needs.decide.outputs.matrix != '{"include":[]}'
+    if: needs.decide.outputs.has_jobs == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
