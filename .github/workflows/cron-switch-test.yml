@@ -8,7 +8,7 @@ on:
       uat:    { type: boolean, default: true }
       action: { type: choice, options: [scale-down, scale-up], default: scale-up }
   schedule:
-    - cron: '10 40 * * *'      # 10:10 UAE
+    - cron: '50 10 * * *'      # 10:50 UAE (odd time, ~30 min lead; avoid :00/:30)
       timezone: 'Asia/Dubai'
 permissions:
   contents: read
