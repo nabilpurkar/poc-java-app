@@ -79,7 +79,7 @@ jobs:
             echo "- event: \`${{ github.event_name }}\`  | action: \`$ACTION\`"
             echo "- inputs: dev=\`${INPUT_DEV:-}\`  uat=\`${INPUT_UAT:-}\`"
             echo "- matrix: \`$MATRIX\`"
-            [[ "$MATRIX" == '{"include":[]}' ]] && echo "- ⚠️ empty matrix → run job will be skipped"
+            if [[ "$MATRIX" == '{"include":[]}' ]]; then echo "- ⚠️ empty matrix → run job will be skipped"; fi
           } >> "$GITHUB_STEP_SUMMARY"
 
   run:
