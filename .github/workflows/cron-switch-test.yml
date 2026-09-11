@@ -1,36 +1,14 @@
 name: Cron Switch Test
-# Safe test of the cron + master/per-env switch mechanism.
-# It does NOT touch Azure — it only echoes what it WOULD do.
-#
-# Setup (personal repo):
-#   1. Create an Environment named "dev-v2".
-#   2. In dev-v2 add two variables:
-#        CRON_MASTER_ENABLED = true|false   (global cron kill switch)
-#        CRON_ENABLED        = true|false   (this env's cron switch)
-#   3. Flip them and watch the run summary to confirm gating.
-#
-# NOTE: GitHub cron supports a `timezone:` field (IANA name). Using Asia/Dubai,
-#       so the times below are UAE local time directly. Scheduled runs can still
-#       be delayed several minutes on GitHub's side.
+# Test-only (no Azure). Cron gates each env by its own CRON_ENABLED variable
+# (in <env>-v2). Manual runs bypass the switch. Action derived from the minute.
 on:
   workflow_dispatch:
     inputs:
-      dev:
-        description: 'Run for dev'
-        type: boolean
-        default: true
-      uat:
-        description: 'Run for uat'
-        type: boolean
-        default: true
-      action:
-        type: choice
-        options: [scale-down, scale-up]
-        default: scale-up
+      dev:    { type: boolean, default: true }
+      uat:    { type: boolean, default: true }
+      action: { type: choice, options: [scale-down, scale-up], default: scale-up }
   schedule:
-    # Action is derived from the minute (see decide), not the cron string.
-    # 10:10 UAE -> minute 10 -> scale-up.
-    - cron: '10 10 * * *'
+    - cron: '10 10 * * *'      # 10:10 UAE
       timezone: 'Asia/Dubai'
 permissions:
   contents: read
@@ -44,104 +22,70 @@ jobs:
     steps:
       - id: g
         shell: bash
+        env:
+          MASTER: ${{ vars.CRON_MASTER_ENABLED }}
         run: |
-          echo "enabled=${{ vars.CRON_MASTER_ENABLED }}" >> "$GITHUB_OUTPUT"
-          echo "Master switch (CRON_MASTER_ENABLED) = '${{ vars.CRON_MASTER_ENABLED }}'"
+          echo "enabled=$MASTER" >> "$GITHUB_OUTPUT"
+          if [[ "$MASTER" == "true" ]]; then
+            echo "🟢 Master gate ENABLED (CRON_MASTER_ENABLED=$MASTER) — scheduled runs will proceed"
+            echo "### 🟢 Master gate ENABLED — scheduled runs will proceed" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "🔴 Master gate DISABLED (CRON_MASTER_ENABLED=$MASTER) — all scheduled runs skipped"
+            echo "### 🔴 Master gate DISABLED — all scheduled runs skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
   decide:
-    needs: [master-gate]
+    needs: master-gate
     if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
     env:
       ENVIRONMENTS: 'dev uat'
       INPUT_DEV: ${{ inputs.dev }}
       INPUT_UAT: ${{ inputs.uat }}
-    outputs:
-      matrix: ${{ steps.logic.outputs.matrix }}
-      skip_all: ${{ steps.logic.outputs.skip_all }}
     steps:
-      - id: logic
+      - id: m
         shell: bash
         run: |
           set -euo pipefail
-          EVENT="${{ github.event_name }}"
-          if [[ "$EVENT" == "workflow_dispatch" ]]; then
-            ACTION="${{ inputs.action }}"
-          else
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
             if [[ "${{ needs.master-gate.outputs.enabled }}" != "true" ]]; then
-              echo "Master cron switch OFF — skipping all."
-              echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
-              echo "skip_all=true" >> "$GITHUB_OUTPUT"
-              exit 0
+              echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"; exit 0   # master OFF -> skip all
             fi
-            # Robust action pick: derive from the current minute so it works even if
-            # a stale/mismatched cron string fired. 10# avoids octal errors on 08/09.
-            MIN=$(date -u +%M)
-            if (( (10#$MIN / 5) % 2 == 0 )); then ACTION="scale-up"; else ACTION="scale-down"; fi
-          fi
-          if [[ "$ACTION" == "skip" ]]; then
-            echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
-            echo "skip_all=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          matrix='{"include":['
-          sep=''
-          for e in $ENVIRONMENTS; do
-            up="INPUT_$(echo "$e" | tr '[:lower:]-' '[:upper:]_')"
-            if [[ "$EVENT" == "workflow_dispatch" ]]; then
-              val="${!up:-false}"
-              [[ "$val" == "true" ]] || continue
-            fi
-            matrix+="${sep}{\"name\":\"$e\",\"action\":\"$ACTION\"}"
-            sep=','
-          done
-          matrix+=']}'
-          if [[ "$matrix" == '{"include":[]}' ]]; then
-            echo "skip_all=true" >> "$GITHUB_OUTPUT"
+            MIN=$(date -u +%M)                                   # 10# avoids octal on 08/09
+            (( (10#$MIN / 5) % 2 == 0 )) && ACTION="scale-up" || ACTION="scale-down"
           else
-            echo "skip_all=false" >> "$GITHUB_OUTPUT"
+            ACTION="${{ inputs.action }}"
           fi
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-          echo "Resolved matrix: $matrix"
+          inc=""
+          for e in $ENVIRONMENTS; do
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+              key="INPUT_$(echo "$e" | tr '[:lower:]' '[:upper:]')"
+              [[ "${!key:-false}" == "true" ]] || continue       # manual: only ticked envs
+            fi
+            inc="${inc:+$inc,}{\"name\":\"$e\",\"action\":\"$ACTION\"}"
+          done
+          echo "matrix={\"include\":[$inc]}" >> "$GITHUB_OUTPUT"
   run:
-    needs: [decide]
+    needs: decide
+    if: needs.decide.outputs.matrix != '{"include":[]}'
     runs-on: ubuntu-latest
-    if: always() && needs.decide.outputs.skip_all != 'true'
-    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.decide.outputs.matrix) }}
     environment: ${{ matrix.name }}-v2
     steps:
-      - id: gate
-        shell: bash
+      - shell: bash
         env:
           EVT: ${{ github.event_name }}
           ENV_NAME: ${{ matrix.name }}
           ACTION: ${{ matrix.action }}
           CRON_ENABLED: ${{ vars.CRON_ENABLED }}
         run: |
-          run=true
           if [[ "$EVT" == "schedule" && "$CRON_ENABLED" != "true" ]]; then
-            run=false
+            echo "### $ENV_NAME — ⏭️ GATED (cron disabled, CRON_ENABLED=$CRON_ENABLED)" >> "$GITHUB_STEP_SUMMARY"
+            echo "GATED: $ENV_NAME"; exit 0
           fi
-          echo "run=$run" >> "$GITHUB_OUTPUT"
-          {
-            echo "### Cron Switch Test — $ENV_NAME"
-            echo "- Event: \`$EVT\`"
-            echo "- Per-env switch (CRON_ENABLED): \`$CRON_ENABLED\`"
-            echo "- Requested action: \`$ACTION\`"
-            if [[ "$run" == "true" ]]; then
-              echo "- ✅ WOULD RUN: $ACTION for $ENV_NAME (switch allowed)"
-            else
-              echo "- ⏭️ GATED: cron disabled for $ENV_NAME (no action taken)"
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-      - name: Simulated work
-        if: steps.gate.outputs.run == 'true'
-        shell: bash
-        env:
-          ENV_NAME: ${{ matrix.name }}
-          ACTION: ${{ matrix.action }}
-        run: echo "[SIMULATION] $ACTION would execute for $ENV_NAME — no Azure calls."
+          echo "### $ENV_NAME — ✅ WOULD $ACTION (event=$EVT)" >> "$GITHUB_STEP_SUMMARY"
+          echo "[SIMULATION] $ACTION for $ENV_NAME — no Azure calls."
  
