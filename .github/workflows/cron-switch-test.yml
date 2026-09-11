@@ -1,6 +1,8 @@
 name: Cron Switch Test
+
 # Test-only (no Azure). Cron gates each env by its own CRON_ENABLED variable
 # (in <env>-v2). Manual runs bypass the switch. Action derived from the minute.
+
 on:
   workflow_dispatch:
     inputs:
@@ -10,8 +12,10 @@ on:
   schedule:
     - cron: '50 10 * * *'      # 10:50 UAE (odd time, ~30 min lead; avoid :00/:30)
       timezone: 'Asia/Dubai'
+
 permissions:
   contents: read
+
 jobs:
   master-gate:
     if: github.event_name == 'schedule'
@@ -33,6 +37,7 @@ jobs:
             echo "🔴 Master gate DISABLED (CRON_MASTER_ENABLED=$MASTER) — all scheduled runs skipped"
             echo "### 🔴 Master gate DISABLED — all scheduled runs skipped" >> "$GITHUB_STEP_SUMMARY"
           fi
+
   decide:
     needs: master-gate
     if: always()
@@ -65,7 +70,18 @@ jobs:
             fi
             inc="${inc:+$inc,}{\"name\":\"$e\",\"action\":\"$ACTION\"}"
           done
-          echo "matrix={\"include\":[$inc]}" >> "$GITHUB_OUTPUT"
+          MATRIX="{\"include\":[$inc]}"
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "event=${{ github.event_name }} dev=${INPUT_DEV:-} uat=${INPUT_UAT:-} action=$ACTION"
+          echo "resolved matrix: $MATRIX"
+          {
+            echo "### decide"
+            echo "- event: \`${{ github.event_name }}\`  | action: \`$ACTION\`"
+            echo "- inputs: dev=\`${INPUT_DEV:-}\`  uat=\`${INPUT_UAT:-}\`"
+            echo "- matrix: \`$MATRIX\`"
+            [[ "$MATRIX" == '{"include":[]}' ]] && echo "- ⚠️ empty matrix → run job will be skipped"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   run:
     needs: decide
     if: needs.decide.outputs.matrix != '{"include":[]}'
@@ -88,4 +104,3 @@ jobs:
           fi
           echo "### $ENV_NAME — ✅ WOULD $ACTION (event=$EVT)" >> "$GITHUB_STEP_SUMMARY"
           echo "[SIMULATION] $ACTION for $ENV_NAME — no Azure calls."
- 
